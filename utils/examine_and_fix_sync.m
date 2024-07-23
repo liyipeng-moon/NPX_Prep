@@ -25,9 +25,10 @@ ylabel('time lag between edges')
 if(length(SyncLine.NI_time)~=length(SyncLine.imec_time))
     warning('Sync Fail! Fixing...\n')
     index = find(d2 > 1200);
+    
     if ~isempty(index)
         for i = 1:length(index)
-            idx = index(i)+1;
+            idx = index(i)+i;
             new_value = (SyncLine.NI_time(idx) + SyncLine.NI_time(idx + 1)) / 2;
             SyncLine.NI_time = [SyncLine.NI_time(1:idx), new_value, SyncLine.NI_time(idx+1:end)];
         end
@@ -44,6 +45,7 @@ if(length(SyncLine.NI_time)~=length(SyncLine.imec_time))
     title(sprintf('NI max diff is %f', max(d2)))
     xlabel('# of rising edge')
     ylabel('time lag between edges')
+
 
 else
     fprintf('Sync Success!\n')

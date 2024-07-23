@@ -1,23 +1,42 @@
-addpath(genpath('../'))
-clear
-close all
+function Load_Data_function(data_path)
 
+cd(data_path)
+clear
+mkdir processed
 %% Load Data
 % Load NI Data
-session_name = 'myRun0615sync_g0';
+SGLX_Folder = dir('NPX*');
+session_name = SGLX_Folder(1).name;
+g_number = session_name(end);
 NIFileName=fullfile(session_name, sprintf('%s_t0.nidq', session_name));
 [NI_META, AIN, DCode_NI] = load_NI_data(NIFileName);
 
 % Load ML Data
-% trial_ML = mlread('240615_JianJian_PV_OE.bhv2');
-% save Trial_ML.mat trial_ML
-load Trial_ML.mat
+ML_FILE = dir('*bhv2');
+ml_name = ML_FILE(1).name;
+[exp_day, exp_subject] = parsing_ML_name(ml_name);
+
+trial_ML_name = fullfile('processed',sprintf('ML_%s.mat',ml_name(1:end-5)));
+file_exist = length(dir(trial_ML_name));
+if(file_exist)
+    load(trial_ML_name);
+else
+    trial_ML = mlread(ml_name);
+    save(trial_ML_name, "trial_ML")
+end
+
 
 ImecFileName=fullfile(session_name,sprintf('%s_imec0',session_name), sprintf('%s_t0.imec0.lf',session_name));
 [IMEC_META, DCode_IMEC] = load_IMEC_data(ImecFileName);
+ImecFileName=fullfile(session_name,sprintf('%s_imec0',session_name), sprintf('%s_t0.imec0.ap',session_name));
+IMEC_AP_META = load_meta(sprintf('%s.meta', ImecFileName));
+
+
 
 % Do Sync between Devices
 SyncLine = examine_and_fix_sync(DCode_NI, DCode_IMEC);
+
+
 %% check for alignment between ML and NI
 onset_times = 0;
 offset_times = 0;
@@ -41,7 +60,9 @@ for tt = 1:length(LOCS)
     all_code_this_trial = DCode_NI.CodeVal(LOC1:LOC2);
     onset_times_by_trial_SGLX(tt) = sum(all_code_this_trial==64);
 end
-figure;subplot(1,5,1)
+figure;
+set(gcf,'Position',[50 600 1600 350])
+subplot(1,5,1)
 scatter(onset_times_by_trial_SGLX,onset_times_by_trial_ML)
 xlabel('onset times SGLX'); ylabel('onset times ML')
 if(max(onset_times_by_trial_ML-onset_times_by_trial_SGLX)>0)
@@ -56,8 +77,10 @@ for trial_idx = 1:length(trial_ML)
 end
 dataset_pool = unique(dataset_pool);
 
+% get tsv name
+img_set_name = get_tsv_name(dataset_pool{1});
 %% check for eye
-eye_thres = 0.6;
+eye_thres = 0.8;
 valid_eye = 0;
 onset_marker = 0;
 trial_valid_idx = zeros([1,onset_times]);
@@ -67,11 +90,11 @@ for trial_idx = 1:length(trial_ML)
     onset_duration = trial_data.VariableChanges.onset_time;
     beh_code = trial_data.BehavioralCodes.CodeNumbers;
     beh_time = trial_data.BehavioralCodes.CodeTimes;
-    
+
     onset_beh_location = find(beh_code==64);
     onset_times_this_trial = length(onset_beh_location);
     img_idx_now = trial_data.UserVars.Current_Image_Train(1:onset_times_this_trial);
-    
+
     dataset_idx = find(strcmp(trial_ML(trial_idx).UserVars.DatasetName, dataset_pool));
     for onset_idx = 1:onset_times_this_trial
         onset_marker = onset_marker + 1;
@@ -139,11 +162,7 @@ end
 po_dis(~dataset_valid_idx,:)=[];
 shadedErrorBar((1:size(po_dis,2))-before_onset_measure,mean(po_dis),std(po_dis))
 xlabel('time from event'); title('Exclude Non-Look Trial')
-
-save Prep_data.mat trial_valid_idx dataset_valid_idx onset_time_ms NI_META AIN DCode_NI IMEC_META DCode_IMEC SyncLine
-saveas(gcf,'Prep_sync_ni_ml')
-
-%% Parsing about dataset idx
+saveas(gcf,'processed\Prep_sync_ni_ml')
 % Transform about Data
 figure
 for dataset_idx = 1:length(dataset_pool)
@@ -158,12 +177,17 @@ for dataset_idx = 1:length(dataset_pool)
     end
     plot(1:img_size,onset_t)
     lines = strsplit(dataset_pool{dataset_idx}, '\');
-    title(lines{end})
+    title(lines{end},Interpreter="none")
     xlim([1,img_size])
     ylim([0, max(onset_t)+1])
 end
 nexttile
 scatter(1:length(dataset_valid_idx),dataset_valid_idx)
 xlabel('onset idx')
-title('which dataset')
-saveas(gcf,'Prep_img_size')
+title('which dataset',Interpreter='none')
+saveas(gcf,'processed\Prep_img_size')
+
+save_name = fullfile('processed',sprintf('META_%s_%s_%s.mat', exp_day, exp_subject, img_set_name));
+
+save(save_name, "ml_name","trial_valid_idx", "dataset_valid_idx", "onset_time_ms", "NI_META", "AIN", "DCode_NI", "IMEC_META","DCode_IMEC","SyncLine","IMEC_AP_META","img_size","g_number");
+end
