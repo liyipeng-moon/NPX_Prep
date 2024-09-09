@@ -1,7 +1,5 @@
 function [ks_output] = load_KS4_output(ks_path, IMEC_AP_META,SyncLine)
 
-
-
 loading_data = {'spike_times', 'spike_templates','templates','spike_positions','amplitudes'};
 for d_idx = 1:length(loading_data)
     data_now = loading_data{d_idx};
@@ -29,7 +27,7 @@ strc_unit = repmat(example_unit, [1, max(spike_templates)]);
 for spike_idx = 1:max(spike_templates)
     
     example_unit.waveform = squeeze(templates(spike_idx,:,:));
-    example_unit.spiketime_ms = spike_times(spike_templates==spike_idx);
+    example_unit.spiketime_ms = sync_spike_times(spike_templates==spike_idx);
     example_unit.spikepos = mean(spike_positions((spike_templates==spike_idx),:));
     example_unit.amplitudes = amplitudes(spike_templates==spike_idx);
     example_unit.kslabel=KS_LABEL{spike_idx};
@@ -39,4 +37,5 @@ for spike_idx = 1:max(spike_templates)
 end
 
 ks_output=strc_unit;
+
 end

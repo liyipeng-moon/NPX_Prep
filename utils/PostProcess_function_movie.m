@@ -1,4 +1,4 @@
-function PostProcess_function(data_path,nas_location)
+function PostProcess_function_movie(data_path,nas_location)
 
 cd(data_path)
 close all
@@ -6,20 +6,20 @@ close all
 meta_file = dir('processed/GoodUnitRaw*');
 load(fullfile('processed',meta_file(1).name));
 
-global_params.m_strctStimulusParams.onset_time = trial_ML(1).VariableChanges.onset_time;
-global_params.m_strctStimulusParams.offset_time = trial_ML(1).VariableChanges.offset_time;
-global_params.m_strImageListUsed = trial_ML(1).UserVars.DatasetName;
+global_params.m_strctStimulusParams.onset_time = 3000;
+global_params.m_strctStimulusParams.offset_time = 500;
+% global_params.m_strImageListUsed = trial_ML(1).UserVars.DatasetName;
 
 mkdir processed/data_viewer
 %%
 
-pre_onset = 50;
+pre_onset = 1000;
 global_params.pre_onset = pre_onset;
-post_onset = 300;
+post_onset = 5000;
 global_params.post_onset = post_onset;
 good_idx = 1;
 
-psth_window_size_ms = 20;
+psth_window_size_ms = 40;
 
 switch global_params.m_strctStimulusParams.onset_time
     case 150
@@ -32,7 +32,8 @@ switch global_params.m_strctStimulusParams.onset_time
         base_line_time = -25:25;
         high_line_time = 60:280;
     otherwise
-
+        base_line_time = -49:0;
+        high_line_time = 100:2000;
 end
 
 global_params.psth_window_size_ms = psth_window_size_ms;
@@ -67,6 +68,7 @@ for spike_num = 1:length(UnitStrc)
     good_trial = find(trial_valid_idx & valid_trial_this_neuron);
     raster_raw = zeros([length(good_trial), pre_onset+post_onset]);
     for good_trial_idx = 1:length(good_trial)
+        
         loc_in_orig = good_trial(good_trial_idx);
         onset_time_trial = onset_time_ms(loc_in_orig);
         time_bound = spike_time(spike_time>onset_time_trial-pre_onset & spike_time<onset_time_trial+post_onset);
@@ -82,7 +84,7 @@ for spike_num = 1:length(UnitStrc)
     for img = 1:img_size
         onset_t(img) = sum(img_idx==img);
     end
-    if(min(onset_t)<2)
+    if(min(onset_t)<3)
         continue
     end
 
@@ -107,8 +109,8 @@ for spike_num = 1:length(UnitStrc)
     highline = psth_raw(:,(high_line_time)+pre_onset+1);
 
     [p,h,stats] = ranksum(highline(:),baseline(:),method="approximate");
-    if(p<0.01)
-
+    if(p<0.0001)
+        
         subplot(2,5,1)
         wdata = UnitStrc(spike_num).waveform;
         [a,b]=find(abs(wdata) == max(abs(wdata(:))));
@@ -158,7 +160,6 @@ for spike_num = 1:length(UnitStrc)
         GoodUnitStrc(good_idx).spikepos = UnitStrc(spike_num).spikepos;
         GoodUnitStrc(good_idx).amplitudes = UnitStrc(spike_num).amplitudes;
         GoodUnitStrc(good_idx).kslabel = UnitStrc(spike_num).kslabel;
-
         GoodUnitStrc(good_idx).Raster = uint8(raster_raw);
         GoodUnitStrc(good_idx).img_idx = img_idx;
         GoodUnitStrc(good_idx).response_matrix_img = response_matrix_img;
@@ -168,6 +169,7 @@ for spike_num = 1:length(UnitStrc)
 end
 GoodUnitStrc(good_idx:end)=[];
 global_params.PsthRange = psth_range(2:end);
+
 
 file_name_LOCAL = fullfile('processed',sprintf('GoodUnit_%s_g%s.mat',meta_file(1).name(13:end-7), meta_data.g_number));
 save(file_name_LOCAL, "GoodUnitStrc", "trial_ML","global_params",'meta_data','-v7.3')

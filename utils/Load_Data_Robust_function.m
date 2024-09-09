@@ -1,55 +1,64 @@
-function Load_Data_function(data_path)
+function Load_Data_Robust_function(data_path)
 
 cd(data_path)
 clear
 mkdir processed
 %% Load Data
 % Load NI Data
+
 SGLX_Folder = dir('NPX*');
 session_name = SGLX_Folder(1).name;
 g_number = session_name(end);
 NIFileName=fullfile(session_name, sprintf('%s_t0.nidq', session_name));
-[NI_META, AIN, DCode_NI] = load_NI_data(NIFileName);
+[NI_META1, AIN1, DCode_NI1] = load_NI_data(NIFileName);
 
+%% Delete DCode after 150 64
+a=find(DCode_NI1.CodeVal==2, 151);
+a=a(end);
+b=find(DCode_NI1.CodeVal==64);
+b = b(b>a);
+DCode_NI1.CodeLoc([a,b])=[];
+DCode_NI1.CodeVal([a,b])=[];
+DCode_NI1.CodeTime([a,b])=[];
+session_name = SGLX_Folder(2).name;
+g_number = session_name(end);
+NIFileName=fullfile(session_name, sprintf('%s_t0.nidq', session_name));
+[NI_META2, AIN2, DCode_NI2] = load_NI_data(NIFileName);
+
+AIN = [AIN1, AIN2   ];
+DCode_NI.CodeLoc = [DCode_NI1.CodeLoc, DCode_NI2.CodeLoc];
+DCode_NI.CodeVal = [DCode_NI1.CodeVal, DCode_NI2.CodeVal];
+DCode_NI.CodeTime = [DCode_NI1.CodeTime, DCode_NI2.CodeTime];
 % Load ML Data
 ML_FILE = dir('*bhv2');
-if(isempty(ML_FILE))
-    ML_FILE = dir('*mat');
-end
 ml_name = ML_FILE(1).name;
 [exp_day, exp_subject] = parsing_ML_name(ml_name);
 
-% Load Grid
-
-textData = fileread('GRID.txt');
-lines = strsplit(textData, '\n');
-Grid = lines{1}(1:end-1);
-Notes = lines{2};
 trial_ML_name = fullfile('processed',sprintf('ML_%s.mat',ml_name(1:end-5)));
 file_exist = length(dir(trial_ML_name));
 if(file_exist)
     load(trial_ML_name);
 else
-    if(ml_name(end)=='2')
-        trial_ML = mlread(ml_name);
-    else
-        temp = load(ml_name);
-        temp = rmfield(temp,'MLConfig');
-        temp = rmfield(temp ,'TrialRecord');
-        all_trial_num = length(fieldnames(temp));
-        for tt = 1:all_trial_num
-            trial_ML(tt) = getfield(temp, sprintf('Trial%d', tt));
-        end
-    end
-
+    trial_ML1 = mlread(ML_FILE(1).name);
+    trial_ML2 = mlread(ML_FILE(2).name);
+    trial_ML = [trial_ML1,trial_ML2];
     save(trial_ML_name, "trial_ML")
 end
 
 
+
+session_name = SGLX_Folder(1).name;
 ImecFileName=fullfile(session_name,sprintf('%s_imec0',session_name), sprintf('%s_t0.imec0.lf',session_name));
-[IMEC_META, DCode_IMEC] = load_IMEC_data(ImecFileName);
+[IMEC_META1, DCode_IMEC1] = load_IMEC_data(ImecFileName);
+session_name = SGLX_Folder(2).name;
+ImecFileName=fullfile(session_name,sprintf('%s_imec0',session_name), sprintf('%s_t0.imec0.lf',session_name));
+[IMEC_META2, DCode_IMEC2] = load_IMEC_data(ImecFileName);
+
+DCode_IMEC.CodeLoc = [DCode_IMEC1.CodeLoc, DCode_IMEC2.CodeLoc];
+DCode_IMEC.CodeVal = [DCode_IMEC1.CodeVal, DCode_IMEC2.CodeVal];
+DCode_IMEC.CodeTime = [DCode_IMEC1.CodeTime, DCode_IMEC2.CodeTime];
 ImecFileName=fullfile(session_name,sprintf('%s_imec0',session_name), sprintf('%s_t0.imec0.ap',session_name));
-IMEC_AP_META = load_meta(sprintf('%s.meta', ImecFileName));
+IMEC_AP_META1 = load_meta(sprintf('%s.meta', ImecFileName));
 
 
 
@@ -132,6 +141,7 @@ for trial_idx = 1:length(trial_ML)
 end
 
 %% Look Up For Real Onset Time
+keyboard
 before_onset_measure = 30;
 after_onset_measure = 75;
 after_onset_stats = 150;
@@ -184,9 +194,6 @@ shadedErrorBar((1:size(po_dis,2))-before_onset_measure,mean(po_dis),std(po_dis))
 xlabel('time from event'); title('Exclude Non-Look Trial')
 saveas(gcf,'processed\Prep_sync_ni_ml')
 % Transform about Data
-
-
-
 figure
 for dataset_idx = 1:length(dataset_pool)
     nexttile
@@ -205,16 +212,12 @@ for dataset_idx = 1:length(dataset_pool)
     ylim([0, max(onset_t)+1])
 end
 nexttile
-
-%%
 scatter(1:length(dataset_valid_idx),dataset_valid_idx)
 xlabel('onset idx')
 title('which dataset',Interpreter='none')
 saveas(gcf,'processed\Prep_img_size')
 
-
-
-
 save_name = fullfile('processed',sprintf('META_%s_%s_%s.mat', exp_day, exp_subject, img_set_name));
-save(save_name, "Grid",'Notes',"ml_name","trial_valid_idx", "dataset_valid_idx", "onset_time_ms", "NI_META", "AIN", "DCode_NI", "IMEC_META","DCode_IMEC","SyncLine","IMEC_AP_META","img_size","g_number");
+
+save(save_name, "ml_name","trial_valid_idx", "dataset_valid_idx", "onset_time_ms", "NI_META", "AIN", "DCode_NI", "IMEC_META","DCode_IMEC","SyncLine","IMEC_AP_META","img_size","g_number");
 end
