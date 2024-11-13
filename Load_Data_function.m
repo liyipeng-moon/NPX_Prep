@@ -13,9 +13,6 @@ NIFileName=fullfile(session_name, sprintf('%s_t0.nidq', session_name));
 
 % Load ML Data
 ML_FILE = dir('*bhv2');
-if(isempty(ML_FILE))
-    ML_FILE = dir('*mat');
-end
 ml_name = ML_FILE(1).name;
 [exp_day, exp_subject] = parsing_ML_name(ml_name);
 
@@ -30,18 +27,7 @@ file_exist = length(dir(trial_ML_name));
 if(file_exist)
     load(trial_ML_name);
 else
-    if(ml_name(end)=='2')
-        trial_ML = mlread(ml_name);
-    else
-        temp = load(ml_name);
-        temp = rmfield(temp,'MLConfig');
-        temp = rmfield(temp ,'TrialRecord');
-        all_trial_num = length(fieldnames(temp));
-        for tt = 1:all_trial_num
-            trial_ML(tt) = getfield(temp, sprintf('Trial%d', tt));
-        end
-    end
-
+    trial_ML = mlread(ml_name);
     save(trial_ML_name, "trial_ML")
 end
 
@@ -58,6 +44,8 @@ SyncLine = examine_and_fix_sync(DCode_NI, DCode_IMEC);
 
 
 %% check for alignment between ML and NI
+
+
 onset_times = 0;
 offset_times = 0;
 onset_times_by_trial_ML = zeros([1, length(trial_ML)]);
@@ -68,7 +56,8 @@ for tt = 1:length(trial_ML)
 end
 fprintf('MonkeyLogic Has\n%d trials \n%d onset \n%d offset \n', length(trial_ML), onset_times, offset_times)
 
-LOCS = find(DCode_NI.CodeVal==2);
+
+LOCS = find(diff(bitand(DCode_NI.CodeVal,2))>0)+1;
 onset_times_by_trial_SGLX = zeros([1, length(LOCS)]);
 for tt = 1:length(LOCS)
     LOC1=LOCS(tt);
@@ -78,11 +67,12 @@ for tt = 1:length(LOCS)
         LOC2=LOCS(tt+1);
     end
     all_code_this_trial = DCode_NI.CodeVal(LOC1:LOC2);
-    onset_times_by_trial_SGLX(tt) = sum(all_code_this_trial==64);
+    onset_times_by_trial_SGLX(tt) = length(find(diff(bitand(all_code_this_trial,64))>0));
 end
 figure;
-set(gcf,'Position',[50 600 1600 350])
+set(gcf,'Position',[420 750 1600 250])
 subplot(1,5,1)
+
 scatter(onset_times_by_trial_SGLX,onset_times_by_trial_ML)
 xlabel('onset times SGLX'); ylabel('onset times ML')
 if(max(onset_times_by_trial_ML-onset_times_by_trial_SGLX)>0)
@@ -100,7 +90,8 @@ dataset_pool = unique(dataset_pool);
 % get tsv name
 img_set_name = get_tsv_name(dataset_pool{1});
 %% check for eye
-eye_thres = 0.8;
+
+eye_thres = 0.9;
 valid_eye = 0;
 onset_marker = 0;
 trial_valid_idx = zeros([1,onset_times]);
@@ -132,11 +123,11 @@ for trial_idx = 1:length(trial_ML)
 end
 
 %% Look Up For Real Onset Time
+
 before_onset_measure = 30;
 after_onset_measure = 75;
 after_onset_stats = 150;
-
-onset_LOC = find(DCode_NI.CodeVal==64);
+onset_LOC = find(diff(bitand(DCode_NI.CodeVal,64))>0)+1;
 onset_times = length(onset_LOC);
 po_dis = zeros([onset_times, 1+before_onset_measure+after_onset_stats]);
 onset_time_ms = zeros([1, onset_times]);
@@ -150,10 +141,9 @@ shadedErrorBar((1:size(po_dis,2))-before_onset_measure,mean(po_dis),std(po_dis))
 hold on
 baseline = mean(mean(po_dis(:,1:before_onset_measure)));
 hignline = mean(mean(po_dis(:,before_onset_measure+after_onset_measure:before_onset_measure+100)));
-thres = 0.5*baseline + 0.5*hignline;
+thres = 0.3*baseline + 0.7*hignline;
 yline(thres)
 xlabel('time from event');title('Before time calibration')
-
 
 onset_latency = zeros([1, size(po_dis,1)]);
 for tt = 1:size(po_dis,1)
@@ -185,13 +175,21 @@ xlabel('time from event'); title('Exclude Non-Look Trial')
 saveas(gcf,'processed\Prep_sync_ni_ml')
 % Transform about Data
 
-
+if(strcmp(pwd, 'F:\NSD_Project\Data\240901'))
+    to_delete_data = find(onset_time_ms>1600*1000);
+    onset_LOC(to_delete_data)=[];
+    onset_latency(onset_latency)=[];
+    onset_time_ms(to_delete_data)=[];
+    dataset_valid_idx(to_delete_data)=[];
+    trial_valid_idx(to_delete_data)=[];
+end
 
 figure
+set(gcf,'Position',[800 60 1000 400])
 for dataset_idx = 1:length(dataset_pool)
     nexttile
     dataset_tsv = readtable(dataset_pool{dataset_idx}, 'FileType', 'text', 'Delimiter', '\t');
-    img_idx = find(dataset_valid_idx==dataset_idx);
+    img_idx = dataset_valid_idx==dataset_idx;
     valid_onset = trial_valid_idx(img_idx);
     onset_t = [];
     img_size = size(dataset_tsv,1);
@@ -205,16 +203,13 @@ for dataset_idx = 1:length(dataset_pool)
     ylim([0, max(onset_t)+1])
 end
 nexttile
-
-%%
 scatter(1:length(dataset_valid_idx),dataset_valid_idx)
 xlabel('onset idx')
 title('which dataset',Interpreter='none')
 saveas(gcf,'processed\Prep_img_size')
 
-
-
-
 save_name = fullfile('processed',sprintf('META_%s_%s_%s.mat', exp_day, exp_subject, img_set_name));
-save(save_name, "Grid",'Notes',"ml_name","trial_valid_idx", "dataset_valid_idx", "onset_time_ms", "NI_META", "AIN", "DCode_NI", "IMEC_META","DCode_IMEC","SyncLine","IMEC_AP_META","img_size","g_number");
+
+onset_time_ms = onset_time_ms-5 ; % fix monitor time err
+save(save_name, "Grid",'Notes',"ml_name","trial_valid_idx", "dataset_valid_idx", "onset_time_ms", "NI_META", "AIN", "DCode_NI", "IMEC_META","DCode_IMEC","SyncLine","IMEC_AP_META","img_size","g_number","exp_subject",'exp_day');
 end

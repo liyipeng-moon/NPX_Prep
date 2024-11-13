@@ -19,18 +19,26 @@ function [NI_META, AIN, DCode] = load_NI_data(NIFileName)
     
     AIN=double(NI_rawData(1,:))*fI2V;
     
-    digital0=NI_rawData(digCh,:);
+%     digital0=NI_rawData(digCh,:);
+% 
+%     
+%     CodeAll = diff(digital0);
+%     DCode.CodeLoc = find(CodeAll>0);
+%     DCode.CodeVal = CodeAll(DCode.CodeLoc);
+%     
 
-    
+    digital0=NI_rawData(digCh,:);
     CodeAll = diff(digital0);
-    DCode.CodeLoc = find(CodeAll>0);
-    DCode.CodeVal = CodeAll(DCode.CodeLoc);
-    
+    DCode.CodeLoc = [find(CodeAll~=0)];
+    digital0(1)=[];
+    DCode.CodeVal = digital0(DCode.CodeLoc);
+    DCode.CodeLoc = [nan, DCode.CodeLoc];
+    DCode.CodeVal = [0,DCode.CodeVal];
     % this means SYNC code occurs with Onset Code, just fix it as simple as
     % possible, you can split 65 as 64+1 ans 63 as 64-1, but I will just ignore it now
-    DCode.CodeVal(DCode.CodeVal==63)=64;
-    DCode.CodeVal(DCode.CodeVal==65)=64;
-    DCode.CodeVal(DCode.CodeVal==3)=2;
+%     DCode.CodeVal(DCode.CodeVal==63)=64;
+%     DCode.CodeVal(DCode.CodeVal==65)=64;
+%     DCode.CodeVal(DCode.CodeVal==3)=2;
     fprintf('Load Event Data\n')
     all_code = unique(DCode.CodeVal);
     for code_now = all_code

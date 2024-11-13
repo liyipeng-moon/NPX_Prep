@@ -1,5 +1,4 @@
 function [ks_output] = load_KS4_output(ks_path, IMEC_AP_META,SyncLine)
-
 loading_data = {'spike_times', 'spike_templates','templates','spike_positions','amplitudes'};
 for d_idx = 1:length(loading_data)
     data_now = loading_data{d_idx};
@@ -22,20 +21,34 @@ example_unit.spiketime_ms=[];
 example_unit.spikepos=[];
 example_unit.amplitudes=[];
 example_unit.kslabel=[];
+example_unit.firing_rate = [];
+example_unit.presence_ratio = [];
+example_unit.ISI_violations = [];
 strc_unit = repmat(example_unit, [1, max(spike_templates)]);
 
+recodring_duration = IMEC_AP_META.fileTimeSecs;
+
+recodring_duration_hmin = recodring_duration./30;
+
+currenyt_path = pwd;
+if(strcmp('240901',currenyt_path(end-5:end)))
+    recodring_duration_hmin = 53;
+end
+edges = 0:30*1000:recodring_duration_hmin*30*1000; % Do this because time is short..
+
+isi_thres = 1.2; % in ms
+AA = [];
 for spike_idx = 1:max(spike_templates)
-    
     example_unit.waveform = squeeze(templates(spike_idx,:,:));
     example_unit.spiketime_ms = sync_spike_times(spike_templates==spike_idx);
     example_unit.spikepos = mean(spike_positions((spike_templates==spike_idx),:));
     example_unit.amplitudes = amplitudes(spike_templates==spike_idx);
     example_unit.kslabel=KS_LABEL{spike_idx};
-
+    example_unit.firing_rate = length(sync_spike_times(spike_templates==spike_idx))/recodring_duration;
+    example_unit.presence_ratio = mean(histcounts(example_unit.spiketime_ms, edges)>0);
+    example_unit.ISI_violations = 100*mean(isi_thres>diff(example_unit.spiketime_ms));
     strc_unit(spike_idx)=example_unit;
     fprintf('Organiza KS output for unit %d %d\n',spike_idx, max(spike_templates))
 end
-
 ks_output=strc_unit;
-
 end
